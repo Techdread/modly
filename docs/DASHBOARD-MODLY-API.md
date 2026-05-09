@@ -214,12 +214,36 @@ Check API health:
 GET /api/health
 ```
 
-List model status:
+List models the Dashboard can use:
 
 ```http
 GET /api/model/all
 Authorization: Bearer your-secret-token
 ```
+
+This is the discovery endpoint for the Dashboard model picker. Each item is a
+registered Modly model extension/node:
+
+```json
+[
+  {
+    "id": "model-extension/model-node",
+    "name": "Model name",
+    "description": "Short description",
+    "version": "1.0.0",
+    "vram_gb": 8,
+    "hf_repo": "owner/repo",
+    "tags": [],
+    "downloaded": true,
+    "loaded": false,
+    "active": false
+  }
+]
+```
+
+Use `id` as the `model_id` field when starting generation. `downloaded` tells
+whether the weights are present on disk, `loaded` tells whether the model is
+currently in memory, and `active` marks the currently selected model.
 
 Check active model:
 
