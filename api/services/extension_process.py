@@ -7,6 +7,8 @@ Communication is done via newline-delimited JSON on stdin/stdout.
 Interface is intentionally compatible with direct BaseGenerator usage
 so GeneratorRegistry can treat both transparently.
 """
+from __future__ import annotations
+
 import base64
 import json
 import os

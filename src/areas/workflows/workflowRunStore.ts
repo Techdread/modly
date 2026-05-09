@@ -1,6 +1,6 @@
 import { create } from 'zustand'
-import axios from 'axios'
 import { useAppStore } from '@shared/stores/appStore'
+import { createApiClient } from '@shared/utils/apiClient'
 import { getWorkflowExtension } from './mockExtensions'
 import type { WorkflowExtension } from './mockExtensions'
 import type { Workflow, WFNode, WFEdge } from '@shared/types/electron.d'
@@ -98,7 +98,7 @@ export const useWorkflowRunStore = create<WorkflowRunStore>((set) => ({
     })
 
     try {
-      const client   = axios.create({ baseURL: apiUrl })
+      const client   = createApiClient(apiUrl)
       const settings = await window.electron.settings.get()
       const workspaceDir = settings.workspaceDir.replace(/\\/g, '/')
 
@@ -342,7 +342,7 @@ export const useWorkflowRunStore = create<WorkflowRunStore>((set) => ({
     _cancel.current = true
     if (_activeJobId.current) {
       const apiUrl = useAppStore.getState().apiUrl
-      axios.create({ baseURL: apiUrl }).post(`/generate/cancel/${_activeJobId.current}`).catch(() => {})
+      createApiClient(apiUrl).post(`/generate/cancel/${_activeJobId.current}`).catch(() => {})
       _activeJobId.current = null
     }
     set({ runState: IDLE, activeNodeId: null, activeWorkflowId: null, nodeImageOutputs: {} })

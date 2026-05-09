@@ -1,10 +1,10 @@
-import axios from 'axios'
 import { useAppStore, GenerationOptions } from '@shared/stores/appStore'
+import { createApiClient } from '@shared/utils/apiClient'
 
 export function useApi() {
   const apiUrl = useAppStore((s) => s.apiUrl)
 
-  const client = axios.create({ baseURL: apiUrl })
+  const client = createApiClient(apiUrl)
 
   async function generateFromImage(
     imagePath: string,

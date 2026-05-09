@@ -115,7 +115,7 @@ declare global {
       }
       python: {
         start:     () => Promise<{ success: boolean; port?: number; error?: string }>
-        status:    () => Promise<{ ready: boolean; apiUrl: string }>
+        status:    () => Promise<{ ready: boolean; apiUrl: string; apiToken: string }>
         onCrashed: (cb: (data: { code: number | null }) => void) => void
         offCrashed: () => void
         onLog:  (cb: (line: string) => void) => void
@@ -160,6 +160,7 @@ declare global {
           userData:  string
           modelsDir: string
           apiUrl:    string
+          apiToken:  string
         }>
         onError:  (cb: (message: string) => void) => void
         offError: () => void

@@ -7,9 +7,14 @@ import { getSettings } from './settings-store'
 import { logger } from './logger'
 import { cleanPythonEnv, getVenvPythonExe } from './python-setup'
 
-const API_PORT = 8765
-const API_HOST = '127.0.0.1'
-export const API_BASE_URL = `http://${API_HOST}:${API_PORT}`
+const DEFAULT_API_PORT = 8765
+const envPort = Number.parseInt(process.env['MODLY_API_PORT'] ?? '', 10)
+const API_PORT = Number.isFinite(envPort) && envPort > 0 ? envPort : DEFAULT_API_PORT
+const API_BIND_HOST = process.env['MODLY_API_BIND_HOST'] ?? process.env['MODLY_API_HOST'] ?? '127.0.0.1'
+const API_CLIENT_HOST = process.env['MODLY_API_CLIENT_HOST']
+  ?? (API_BIND_HOST === '0.0.0.0' || API_BIND_HOST === '::' ? '127.0.0.1' : API_BIND_HOST)
+export const API_BASE_URL = `http://${API_CLIENT_HOST}:${API_PORT}`
+export const API_TOKEN = process.env['MODLY_API_TOKEN'] ?? ''
 
 export class PythonBridge {
   private process: ChildProcess | null = null
@@ -47,7 +52,7 @@ export class PythonBridge {
 
     await this.killProcessOnPort()
 
-    this.process = spawn(pythonExecutable, ['-m', 'uvicorn', 'main:app', '--host', API_HOST, '--port', String(API_PORT)], {
+    this.process = spawn(pythonExecutable, ['-m', 'uvicorn', 'main:app', '--host', API_BIND_HOST, '--port', String(API_PORT)], {
       cwd: apiDir,
       env: {
         ...cleanPythonEnv(),
@@ -59,6 +64,8 @@ export class PythonBridge {
         SELECTED_MODEL_ID:         process.env['SELECTED_MODEL_ID'] ?? '',
         HUGGING_FACE_HUB_TOKEN:    this.resolveHfToken(),
         HF_TOKEN:                  this.resolveHfToken(),
+        MODLY_API_TOKEN:           process.env['MODLY_API_TOKEN'] ?? '',
+        MODLY_CORS_ORIGINS:        process.env['MODLY_CORS_ORIGINS'] ?? '*',
       }
     })
 

@@ -6,7 +6,7 @@ import { rm as rmAsync, readFile, writeFile, mkdir, readdir, rename, cp } from '
 import { existsSync, readdirSync, statSync } from 'fs'
 import axios from 'axios'
 import * as tar from 'tar'
-import { PythonBridge, API_BASE_URL } from './python-bridge'
+import { PythonBridge, API_BASE_URL, API_TOKEN } from './python-bridge'
 import {
   isModelDownloaded,
   listDownloadedModels,
@@ -20,6 +20,10 @@ import { getBuiltinExtensionsDir } from './builtin-sync'
 import { spawn } from 'child_process'
 
 type WindowGetter = () => BrowserWindow | null
+
+function apiAuthHeaders(): Record<string, string> | undefined {
+  return API_TOKEN ? { Authorization: `Bearer ${API_TOKEN}` } : undefined
+}
 
 // ─── GPU detect (best-effort, no Python required) ─────────────────────────────
 
@@ -183,7 +187,8 @@ export function setupIpcHandlers(pythonBridge: PythonBridge, getWindow: WindowGe
 
   ipcMain.handle('python:status', () => ({
     ready: pythonBridge.isReady(),
-    apiUrl: API_BASE_URL
+    apiUrl: API_BASE_URL,
+    apiToken: API_TOKEN
   }))
 
   // File system
@@ -243,7 +248,7 @@ export function setupIpcHandlers(pythonBridge: PythonBridge, getWindow: WindowGe
 
   ipcMain.handle('model:unloadAll', async (): Promise<{ success: boolean; error?: string }> => {
     try {
-      await axios.post(`${API_BASE_URL}/model/unload-all`, {}, { timeout: 10_000 })
+      await axios.post(`${API_BASE_URL}/model/unload-all`, {}, { timeout: 10_000, headers: apiAuthHeaders() })
       return { success: true }
     } catch (err) {
       return { success: false, error: String(err) }
@@ -253,7 +258,7 @@ export function setupIpcHandlers(pythonBridge: PythonBridge, getWindow: WindowGe
   ipcMain.handle('model:delete', async (_, modelId: string): Promise<{ success: boolean; error?: string }> => {
     const modelDir = join(getSettings(app.getPath('userData')).modelsDir, modelId)
     try {
-      await axios.post(`${API_BASE_URL}/model/unload/${encodeURIComponent(modelId)}`, {}, { timeout: 5000 })
+      await axios.post(`${API_BASE_URL}/model/unload/${encodeURIComponent(modelId)}`, {}, { timeout: 5000, headers: apiAuthHeaders() })
     } catch {
       // unload is best-effort — proceed with deletion anyway
     }
@@ -334,7 +339,7 @@ export function setupIpcHandlers(pythonBridge: PythonBridge, getWindow: WindowGe
     try {
       const response = await axios.get(
         `${API_BASE_URL}/export/${format}?path=${encodeURIComponent(meshPath)}`,
-        { responseType: 'arraybuffer' }
+        { responseType: 'arraybuffer', headers: apiAuthHeaders() }
       )
       await writeFile(result.filePath, Buffer.from(response.data as ArrayBuffer))
       return { success: true }
@@ -351,7 +356,8 @@ export function setupIpcHandlers(pythonBridge: PythonBridge, getWindow: WindowGe
     version:   app.getVersion(),
     userData:  app.getPath('userData'),
     modelsDir: getSettings(app.getPath('userData')).modelsDir,
-    apiUrl:    API_BASE_URL
+    apiUrl:    API_BASE_URL,
+    apiToken:  API_TOKEN
   }))
 
   // Settings — seed HF token into main-process env at startup
@@ -377,7 +383,7 @@ export function setupIpcHandlers(pythonBridge: PythonBridge, getWindow: WindowGe
       // subprocesses spawned by ExtensionProcess._build_env() pick it up
       // without requiring a full app restart.
       try {
-        await axios.post(`${API_BASE_URL}/settings/hf-token`, { token: patch.hfToken }, { timeout: 3000 })
+        await axios.post(`${API_BASE_URL}/settings/hf-token`, { token: patch.hfToken }, { timeout: 3000, headers: apiAuthHeaders() })
       } catch { /* FastAPI may not be running yet — ignore */ }
     }
     return updated
@@ -778,7 +784,7 @@ export function setupIpcHandlers(pythonBridge: PythonBridge, getWindow: WindowGe
         }
 
         try {
-          await axios.post(`${API_BASE_URL}/extensions/reload`, {}, { timeout: 10_000 })
+          await axios.post(`${API_BASE_URL}/extensions/reload`, {}, { timeout: 10_000, headers: apiAuthHeaders() })
         } catch { /* Python might not be running yet */ }
       }
 
@@ -815,7 +821,7 @@ export function setupIpcHandlers(pythonBridge: PythonBridge, getWindow: WindowGe
       await rmAsync(extPath, { recursive: true, force: true })
       // Hot-reload Python so it stops using the deleted model extension
       try {
-        await axios.post(`${API_BASE_URL}/extensions/reload`, {}, { timeout: 10_000 })
+        await axios.post(`${API_BASE_URL}/extensions/reload`, {}, { timeout: 10_000, headers: apiAuthHeaders() })
       } catch { /* ignore if Python is not running */ }
       return { success: true }
     } catch (err) {
@@ -833,7 +839,7 @@ export function setupIpcHandlers(pythonBridge: PythonBridge, getWindow: WindowGe
       const { sm: gpuSm, cudaVersion } = await detectGpuInfo()
       await runExtensionSetup(extDir, gpuSm, cudaVersion, (line) => logger.info(`[ext-repair] ${line}`))
       try {
-        await axios.post(`${API_BASE_URL}/extensions/reload`, {}, { timeout: 10_000 })
+        await axios.post(`${API_BASE_URL}/extensions/reload`, {}, { timeout: 10_000, headers: apiAuthHeaders() })
       } catch { /* ignore if Python is not running yet */ }
       return { success: true }
     } catch (err: any) {
@@ -844,7 +850,7 @@ export function setupIpcHandlers(pythonBridge: PythonBridge, getWindow: WindowGe
   // Trigger Python extension reload (without touching the filesystem)
   ipcMain.handle('extensions:reload', async () => {
     try {
-      const res = await axios.post(`${API_BASE_URL}/extensions/reload`, {}, { timeout: 10_000 })
+      const res = await axios.post(`${API_BASE_URL}/extensions/reload`, {}, { timeout: 10_000, headers: apiAuthHeaders() })
       return { success: true, errors: (res.data as { errors?: Record<string, string> }).errors ?? {} }
     } catch (err) {
       return { success: false, error: String(err) }
@@ -915,7 +921,7 @@ export function setupIpcHandlers(pythonBridge: PythonBridge, getWindow: WindowGe
         models_dir:     patch.modelsDir,
         workspace_dir:  patch.workspaceDir,
         extensions_dir: patch.extensionsDir,
-      })
+      }, { headers: apiAuthHeaders() })
       return { success: true }
     } catch (err) {
       return { success: false, error: String(err) }

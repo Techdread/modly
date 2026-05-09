@@ -48,6 +48,7 @@ interface AppState {
   // Backend
   backendStatus: BackendStatus
   apiUrl: string
+  apiToken: string
   backendError: string | null
 
   // Current generation
@@ -106,6 +107,7 @@ export const useAppStore = create<AppState>()(
     (set, get) => ({
       backendStatus: 'not_started',
       apiUrl: '',
+      apiToken: '',
       backendError: null,
 
       setupStatus: 'idle',
@@ -195,15 +197,15 @@ export const useAppStore = create<AppState>()(
         window.electron.python.offCrashed()
         window.electron.python.onCrashed(({ code }) => {
           const msg = `FastAPI process crashed unexpectedly (exit code: ${code ?? 'unknown'})`
-          set({ backendStatus: 'error', apiUrl: '', backendError: msg })
+          set({ backendStatus: 'error', apiUrl: '', apiToken: '', backendError: msg })
           get().showError(msg)
         })
 
         try {
           const result = await window.electron.python.start()
           if (!result.success) throw new Error(result.error ?? 'Failed to start backend')
-          const { apiUrl } = await window.electron.app.info()
-          set({ backendStatus: 'ready', apiUrl })
+          const { apiUrl, apiToken } = await window.electron.app.info()
+          set({ backendStatus: 'ready', apiUrl, apiToken })
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
           set({ backendStatus: 'error', backendError: msg })

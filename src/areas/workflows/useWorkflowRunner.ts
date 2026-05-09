@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from 'react'
-import axios from 'axios'
 import { useAppStore } from '@shared/stores/appStore'
+import { createApiClient } from '@shared/utils/apiClient'
 import type { Workflow, WFNode, WFEdge } from '@shared/types/electron.d'
 import { getWorkflowExtension } from './mockExtensions'
 import type { WorkflowExtension } from './mockExtensions'
@@ -76,7 +76,7 @@ export function useWorkflowRunner(allExtensions: WorkflowExtension[]) {
     })
 
     try {
-      const client       = axios.create({ baseURL: apiUrl })
+      const client       = createApiClient(apiUrl)
       const settings     = await window.electron.settings.get()
       const workspaceDir = settings.workspaceDir.replace(/\\/g, '/')
 
@@ -297,7 +297,7 @@ export function useWorkflowRunner(allExtensions: WorkflowExtension[]) {
   const cancel = useCallback(() => {
     cancelRef.current = true
     if (activeJobId.current) {
-      const client = axios.create({ baseURL: apiUrl })
+      const client = createApiClient(apiUrl)
       client.post(`/generate/cancel/${activeJobId.current}`).catch(() => {})
       activeJobId.current = null
     }
