@@ -86,6 +86,20 @@ Create data directories for models, generated files, and extensions:
 mkdir -p ~/Modly/models ~/Modly/workspace ~/Modly/extensions
 ```
 
+Install at least one Modly model extension into `~/Modly/extensions` before
+expecting models to appear in `/api/model/all`. The model weights do not need to
+be downloaded yet; installed extensions are listed with `"downloaded": false`
+until their weights are present.
+
+Each extension should live in its own folder and contain at least:
+
+```text
+manifest.json
+generator.py
+```
+
+Official extension repos are listed in the main Modly README.
+
 Start the Modly API on the LAN:
 
 ```bash
@@ -214,15 +228,15 @@ Check API health:
 GET /api/health
 ```
 
-List models the Dashboard can use:
+List installed model extensions the Dashboard can use:
 
 ```http
 GET /api/model/all
 Authorization: Bearer your-secret-token
 ```
 
-This is the discovery endpoint for the Dashboard model picker. Each item is a
-registered Modly model extension/node:
+This is the discovery endpoint for the Dashboard model picker. Each item is an
+installed Modly model extension/node. The model weights may still be missing:
 
 ```json
 [
@@ -241,9 +255,31 @@ registered Modly model extension/node:
 ]
 ```
 
-Use `id` as the `model_id` field when starting generation. `downloaded` tells
-whether the weights are present on disk, `loaded` tells whether the model is
-currently in memory, and `active` marks the currently selected model.
+Use `id` as the `model_id` field when starting generation. `downloaded: false`
+means the extension is available but the model weights are not present on disk
+yet. Direct/in-process generators can download weights lazily during generation;
+subprocess extensions may handle their own download during `load()`, depending
+on the extension implementation. `loaded` tells whether the model is currently
+in memory, and `active` marks the currently selected model.
+
+If this endpoint returns `200 OK` with an empty array (`[]`), the API is running
+but has no registered model extensions. Check that `--extensions-dir` points to
+a folder containing installed model extensions. Each model extension folder must
+contain at least `manifest.json` and `generator.py`.
+
+To inspect extension load failures:
+
+```http
+GET /api/extensions/errors
+Authorization: Bearer your-secret-token
+```
+
+After adding or repairing extensions, reload the registry:
+
+```http
+POST /api/extensions/reload
+Authorization: Bearer your-secret-token
+```
 
 Check active model:
 

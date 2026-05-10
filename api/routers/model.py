@@ -1,7 +1,7 @@
 import asyncio
 import json
 from typing import Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from services.generator_registry import generator_registry, MODELS_DIR
 
@@ -68,7 +68,7 @@ async def unload_model(model_id: str):
 
 
 @router.get("/hf-download")
-async def hf_download(repo_id: str, model_id: str, skip_prefixes: Optional[str] = None, token: Optional[str] = None):
+async def hf_download(request: Request, repo_id: str, model_id: str, skip_prefixes: Optional[str] = None, token: Optional[str] = None):
     """
     Streams a HuggingFace Hub model download via SSE.
     Downloads into MODELS_DIR / model_id applying the filtering
@@ -95,8 +95,15 @@ async def hf_download(repo_id: str, model_id: str, skip_prefixes: Optional[str] 
         except KeyError:
             skip_list = []
 
-    # Token: explicit param > env var
-    hf_token = token or os.environ.get("HUGGING_FACE_HUB_TOKEN") or os.environ.get("HF_TOKEN") or None
+    # Token: header > explicit param > env var. The header path avoids leaking
+    # Hugging Face tokens into access logs via the request URL.
+    hf_token = (
+        request.headers.get("X-HuggingFace-Token")
+        or token
+        or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+        or os.environ.get("HF_TOKEN")
+        or None
+    )
 
     async def stream():
         loop = asyncio.get_running_loop()

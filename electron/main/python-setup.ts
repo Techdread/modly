@@ -18,6 +18,15 @@ function getRequirementsPath(): string {
     : join(app.getAppPath(), 'api', 'requirements.txt')
 }
 
+export function getDevApiVenvPythonExe(): string | null {
+  if (app.isPackaged) return null
+  const apiDir = join(app.getAppPath(), 'api')
+  const candidates = process.platform === 'win32'
+    ? [join(apiDir, '.venv', 'Scripts', 'python.exe')]
+    : [join(apiDir, '.venv', 'bin', 'python')]
+  return candidates.find((candidate) => existsSync(candidate)) ?? null
+}
+
 function hashRequirements(): string {
   try {
     const content = readFileSync(getRequirementsPath(), 'utf-8')
@@ -76,6 +85,10 @@ export function getVenvPythonExe(userData: string): string {
 // ─── Setup state ──────────────────────────────────────────────────────────────
 
 export function checkSetupNeeded(userData: string): boolean {
+  // Dev builds can run directly from api/.venv. Do not force the packaged
+  // first-run Python setup unless the dev venv is missing.
+  if (getDevApiVenvPythonExe()) return false
+
   const jsonPath = join(userData, 'python_setup.json')
   if (!existsSync(jsonPath)) return true
   try {
@@ -260,6 +273,13 @@ function findSystemPython(): string {
 
 export async function runFullSetup(win: BrowserWindow, userData: string): Promise<void> {
   try {
+    const devVenvPython = getDevApiVenvPythonExe()
+    if (devVenvPython) {
+      win.webContents.send('setup:complete')
+      console.log('[PythonSetup] Dev venv found, skipping bundled setup:', devVenvPython)
+      return
+    }
+
     const requirementsPath = getRequirementsPath()
     const venvDir = getVenvDir(userData)
 

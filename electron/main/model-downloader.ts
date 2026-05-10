@@ -16,7 +16,14 @@ export interface DownloadProgress {
 }
 export type ProgressCallback = (progress: DownloadProgress) => void
 
-const PYTHON_API_URL = process.env['PYTHON_API_URL'] ?? 'http://127.0.0.1:8765'
+function pythonApiUrl(): string {
+  if (process.env['PYTHON_API_URL']) return process.env['PYTHON_API_URL']
+  const port = process.env['MODLY_API_PORT'] || '8765'
+  const bindHost = process.env['MODLY_API_BIND_HOST'] || process.env['MODLY_API_HOST'] || '127.0.0.1'
+  const clientHost = process.env['MODLY_API_CLIENT_HOST']
+    || (bindHost === '0.0.0.0' || bindHost === '::' ? '127.0.0.1' : bindHost)
+  return `http://${clientHost}:${port}`
+}
 
 // ------------------------------------------------------------------
 // Public API
@@ -114,16 +121,16 @@ export async function downloadModelFromHF(
   skipPrefixes?: string[],
 ): Promise<void> {
   const { net } = require('electron')
-  let url = `${PYTHON_API_URL}/model/hf-download?repo_id=${encodeURIComponent(repoId)}&model_id=${encodeURIComponent(modelId)}`
+  let url = `${pythonApiUrl()}/model/hf-download?repo_id=${encodeURIComponent(repoId)}&model_id=${encodeURIComponent(modelId)}`
   if (skipPrefixes && skipPrefixes.length > 0) {
     url += `&skip_prefixes=${encodeURIComponent(JSON.stringify(skipPrefixes))}`
   }
   const hfToken = getSettings(app.getPath('userData')).hfToken
-  if (hfToken) {
-    url += `&token=${encodeURIComponent(hfToken)}`
-  }
+  const headers: Record<string, string> = {}
+  if (hfToken) headers['X-HuggingFace-Token'] = hfToken
+  if (process.env['MODLY_API_TOKEN']) headers['Authorization'] = `Bearer ${process.env['MODLY_API_TOKEN']}`
 
-  const res = await net.fetch(url)
+  const res = await net.fetch(url, { headers })
   if (!res.ok) throw new Error(`HuggingFace download failed: HTTP ${res.status}`)
   if (!res.body) throw new Error('No response body from HF download stream')
 
