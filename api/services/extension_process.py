@@ -159,6 +159,34 @@ class ExtensionProcess:
         if self._proc is None or self._proc.poll() is not None:
             self._start()
 
+    def _kill_process_tree(self) -> None:
+        """Terminate the runner and any child Python process holding GPU memory."""
+        proc = self._proc
+        if proc is None:
+            return
+
+        if proc.poll() is None:
+            try:
+                if platform.system() == "Windows":
+                    subprocess.run(
+                        ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        check=False,
+                    )
+                else:
+                    proc.kill()
+            except Exception:
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+
+        try:
+            proc.wait(timeout=5)
+        except Exception:
+            pass
+
     # ------------------------------------------------------------------ #
     # BaseGenerator-compatible interface
     # ------------------------------------------------------------------ #
@@ -189,7 +217,8 @@ class ExtensionProcess:
                 self._send({"action": "unload"})
                 self._recv(timeout=30.0)
             except Exception:
-                pass
+                self._kill_process_tree()
+                self._proc = None
         self._loaded = False
 
     def generate(
@@ -215,10 +244,16 @@ class ExtensionProcess:
             if cancel_event and cancel_event.is_set():
                 self._send({"action": "cancel", "id": req_id})
                 # Drain until the subprocess acknowledges
-                while True:
-                    msg = self._recv(timeout=30.0)
-                    if msg.get("type") in ("cancelled", "done", "error"):
-                        raise GenerationCancelled()
+                try:
+                    while True:
+                        msg = self._recv(timeout=30.0)
+                        if msg.get("type") in ("cancelled", "done", "error"):
+                            raise GenerationCancelled()
+                except Exception:
+                    self._kill_process_tree()
+                    self._proc = None
+                    self._loaded = False
+                    raise GenerationCancelled()
 
             # Poll queue with short timeout so we can re-check cancel_event
             try:
@@ -257,6 +292,6 @@ class ExtensionProcess:
                 self._send({"action": "shutdown"})
                 self._proc.wait(timeout=15)
             except Exception:
-                self._proc.kill()
+                self._kill_process_tree()
         self._loaded = False
         self._proc   = None

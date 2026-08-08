@@ -81,9 +81,10 @@ def _discover_extensions() -> Dict[str, Tuple[type, dict]]:
             # but whose vendor/ directory hasn't been built yet: this surfaces a
             # loadError in the UI (Repair button) so the user can run setup.py.
             has_venv         = _venv_python(ext_dir).exists()
+            has_setup        = (ext_dir / "setup.py").exists()
             has_build_vendor = (ext_dir / "build_vendor.py").exists()
             vendor_built     = (ext_dir / "vendor").exists()
-            subprocess_mode  = has_venv or (has_build_vendor and not vendor_built)
+            subprocess_mode  = has_venv or (has_setup and not has_venv) or (has_build_vendor and not vendor_built)
 
             cls_or_None = None
             if not subprocess_mode:

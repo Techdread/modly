@@ -96,10 +96,13 @@ async def cancel_job(job_id: str):
     # and return cleanly without setting an error status.
     try:
         gen = generator_registry._generators.get(generator_registry._active_id)
-        if gen is not None and hasattr(gen, "_proc") and gen._proc and gen._proc.poll() is None:
-            gen._proc.kill()
-            gen._loaded = False
-            gen._proc = None
+        if gen is not None:
+            if hasattr(gen, "stop"):
+                gen.stop()
+            elif hasattr(gen, "_proc") and gen._proc and gen._proc.poll() is None:
+                gen._proc.kill()
+                gen._loaded = False
+                gen._proc = None
     except Exception:
         pass
     return {"cancelled": True}
