@@ -214,6 +214,35 @@ def _smooth(input_path: str, iterations: int, tmp_dir: str) -> trimesh.Trimesh:
         return trimesh.load(ply_out, force="mesh")
 
 
+@router.post("/upload")
+async def upload_mesh(mesh: UploadFile = File(...), collection: str = "Dashboard"):
+    """Write an uploaded mesh into the workspace so /optimize/mesh (and other
+    path-based endpoints) can act on it. Returns the workspace-relative path.
+
+    Lets clients reduce/process a mesh that lives on a *different* host than the
+    Modly server (e.g. a browser app uploading a local .glb) — the path-based
+    optimize endpoints otherwise require the file to already be in WORKSPACE_DIR.
+    """
+    safe_collection = re.sub(r"[^A-Za-z0-9_-]", "_", collection or "Dashboard") or "Dashboard"
+    orig = os.path.basename(mesh.filename or "mesh.glb")
+    ext = os.path.splitext(orig)[1].lower()
+    if ext not in (".glb", ".gltf", ".obj", ".ply", ".stl"):
+        raise HTTPException(400, f"Unsupported mesh format: {ext or 'unknown'}")
+    stem = re.sub(r"[^A-Za-z0-9_-]", "_", os.path.splitext(orig)[0]) or "mesh"
+    filename = f"{stem}_{uuid.uuid4().hex[:8]}{ext}"
+
+    coll_dir = (WORKSPACE_DIR / safe_collection).resolve()
+    if not str(coll_dir).startswith(str(WORKSPACE_DIR.resolve())):
+        raise HTTPException(400, "Invalid collection")
+    coll_dir.mkdir(parents=True, exist_ok=True)
+    dest = coll_dir / filename
+    with open(dest, "wb") as f:
+        shutil.copyfileobj(mesh.file, f)
+
+    rel = f"{safe_collection}/{filename}"
+    return {"path": rel, "url": f"/workspace/{rel}"}
+
+
 class ImportByPathRequest(BaseModel):
     path: str   # absolute path on disk
 
